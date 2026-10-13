@@ -83,6 +83,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.jinja_env.filters["big_money"] = lambda v: "-" if v is None else f"${v:,.0f}"
     app.jinja_env.filters["num"] = lambda v: "-" if v is None else f"{v:,.0f}"
     app.jinja_env.filters["pct"] = lambda v: "-" if v is None else f"{v:+.1f}%"
+    app.jinja_env.filters["entry_at"] = queries.format_entry_at
     app.jinja_env.filters["safe_url"] = safe_url
     app.jinja_env.tests["valid_ticker"] = queries.valid_ticker
     app.jinja_env.filters["sent"] = lambda v: "-" if v is None else f"{v:+.2f}"

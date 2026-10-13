@@ -17,11 +17,11 @@ from models import (
     CongressTrade,
     Portfolio,
     PortfolioHolding,
-    PriceHistory,
     Signal,
     WatchlistItem,
 )
 from portfolio_diff import diff_holdings
+from queries import format_entry_at, latest_price_row, since_entry_pct
 
 log = logging.getLogger(__name__)
 
@@ -94,19 +94,14 @@ def _top_signals(session: Session, now: datetime) -> list[dict]:
 def _watchlist(session: Session) -> list[dict]:
     out = []
     for item in session.scalars(select(WatchlistItem).order_by(WatchlistItem.ticker)):
-        close = session.scalar(
-            select(PriceHistory.close)
-            .where(PriceHistory.ticker == item.ticker)
-            .order_by(PriceHistory.date.desc())
-            .limit(1)
-        )
-        pct = None
-        if close is not None and item.entry_price:
-            pct = (close - item.entry_price) / item.entry_price * 100
+        row = latest_price_row(session, item.ticker)
+        close = row.close if row else None
+        pct = since_entry_pct(item, row)
         out.append(
             {
                 "ticker": item.ticker,
                 "entry_price": item.entry_price,
+                "entry_at": item.entry_at,
                 "latest_close": close,
                 "pnl_pct": None if pct is None else round(pct, 2),
             }
@@ -340,6 +335,8 @@ def _render_watchlist(items: list[dict]) -> str:
             cell = f'<span style="color:{color};font-weight:bold;">{pct:+.2f}%</span>'
         close = "n/a" if w["latest_close"] is None else f"{w['latest_close']:.2f}"
         entry = "n/a" if w["entry_price"] is None else f"{w['entry_price']:.2f}"
+        if w.get("entry_at") is not None:
+            entry += f" ({_e(format_entry_at(w['entry_at']))})"
         rows.append(
             f'<tr><td style="padding:3px 0;font-size:14px;font-family:{_FONT};">'
             f"<strong>{_e(w['ticker'])}</strong></td>"

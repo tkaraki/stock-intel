@@ -3,8 +3,12 @@
   <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
     {% if i.ticker is valid_ticker %}<a href="{{ url_for('ticker_page', symbol=i.ticker) }}" class="text-lg font-bold hover:underline">{{ i.ticker }}</a>{% else %}<span class="text-lg font-bold">{{ i.ticker }}</span>{% endif %}
     <span class="tabular-nums">{{ i.last|money }}</span>
-    <span class="text-sm text-gray-500">entry {{ i.entry_price|money }}</span>
-    <span class="tabular-nums font-medium {{ 'text-gray-500' if i.pnl is none else ('text-green-600 dark:text-green-400' if i.pnl >= 0 else 'text-red-600 dark:text-red-400') }}">{{ i.pnl|pct }}</span>
+    {% if i.entry_price is none %}
+    <span class="text-sm text-gray-500">entry pending (set after next close)</span>
+    {% else %}
+    <span class="text-sm text-gray-500">entry {{ i.entry_price|money }}{% if i.entry_at %} &middot; {{ i.entry_at|entry_at }}{% endif %}</span>
+    {% endif %}
+    <span class="tabular-nums font-medium {{ 'text-gray-500' if i.pnl is none else ('text-green-600 dark:text-green-400' if i.pnl >= 0 else 'text-red-600 dark:text-red-400') }}">{% if i.pnl is not none %}{{ i.pnl|pct }} since entry{% elif i.entry_price is not none %}% updates after next close{% else %}{{ i.pnl|pct }}{% endif %}</span>
     <button hx-delete="{{ url_for('unpin', ticker=i.ticker) }}" hx-target="#row-{{ i.ticker }}" hx-swap="outerHTML"
             class="ml-auto text-sm text-red-600 dark:text-red-400 hover:underline">Unpin</button>
   </div>

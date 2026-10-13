@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -30,7 +30,14 @@ def get_session() -> Session:
 
 
 def init_db(bind: Engine | None = None) -> None:
-    """Create all tables if they do not exist."""
-    from models import Base
+    """Create all tables if they do not exist, and add columns introduced since."""
+    from models import Base, WatchlistItem
 
-    Base.metadata.create_all(bind or engine)
+    bind = bind or engine
+    Base.metadata.create_all(bind)
+    # create_all never alters existing tables, so older databases miss newer columns
+    table = WatchlistItem.__table__
+    if "entry_at" not in {c["name"] for c in inspect(bind).get_columns(table.name)}:
+        col_type = table.c.entry_at.type.compile(dialect=bind.dialect)
+        with bind.begin() as conn:
+            conn.execute(text(f"ALTER TABLE {table.name} ADD COLUMN entry_at {col_type}"))

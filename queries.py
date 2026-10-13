@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 import config
 import scoring
 import summaries
+from fetchers.prices import close_time, live_price
 from models import (
     CongressTrade,
     NewsItem,
@@ -108,22 +109,53 @@ def recent_news(session: Session, ticker: str, limit: int = 3) -> list[NewsItem]
     )
 
 
+def format_entry_at(value: datetime | None) -> str:
+    """e.g. 'Oct 12, 2:14 PM EDT' in the scheduler timezone; '' when unknown."""
+    if value is None:
+        return ""
+    local = value.astimezone(ZoneInfo(config.SCHEDULER_TZ))
+    return f"{local:%b} {local.day}, {local.hour % 12 or 12}:{local:%M %p %Z}"
+
+
 def pnl_pct(entry: float | None, last: float | None) -> float | None:
     if not entry or last is None:
         return None
     return (last - entry) / entry * 100
 
 
+def latest_price_row(session: Session, ticker: str) -> PriceHistory | None:
+    return session.scalar(
+        select(PriceHistory)
+        .where(PriceHistory.ticker == ticker)
+        .order_by(PriceHistory.date.desc())
+        .limit(1)
+    )
+
+
+def since_entry_pct(item: WatchlistItem, row: PriceHistory | None) -> float | None:
+    """% from entry to the latest close; None until a close exists from after the entry.
+
+    A live entry taken mid-session must not be compared with the previous day's close.
+    """
+    if row is None:
+        return None
+    if item.entry_at is not None and close_time(row.date) < item.entry_at:
+        return None
+    return pnl_pct(item.entry_price, row.close)
+
+
 def watchlist(session: Session) -> list[dict]:
     rows = []
     for item in session.scalars(select(WatchlistItem).order_by(WatchlistItem.ticker)):
-        last = latest_close(session, item.ticker)
+        row = latest_price_row(session, item.ticker)
+        last = row.close if row else None
         rows.append(
             {
                 "ticker": item.ticker,
                 "entry_price": item.entry_price,
+                "entry_at": item.entry_at,
                 "last": last,
-                "pnl": pnl_pct(item.entry_price, last),
+                "pnl": since_entry_pct(item, row),
                 "news": recent_news(session, item.ticker),
             }
         )
@@ -132,9 +164,23 @@ def watchlist(session: Session) -> list[dict]:
 
 def pin(session: Session, ticker: str) -> bool:
     """Pin a ticker; returns True if newly created."""
+    live = live_price(ticker)  # network first, so no DB session is held during the call
     if session.scalar(select(WatchlistItem.id).where(WatchlistItem.ticker == ticker)):
         return False
-    session.add(WatchlistItem(ticker=ticker, entry_price=latest_close(session, ticker)))
+    entry_price, entry_at = None, None
+    if live is not None:
+        entry_price, entry_at = live
+    else:
+        # no live quote: fall back to the latest stored close, else the evening fetch backfills
+        row = session.execute(
+            select(PriceHistory.close, PriceHistory.date)
+            .where(PriceHistory.ticker == ticker)
+            .order_by(PriceHistory.date.desc())
+            .limit(1)
+        ).first()
+        if row is not None:
+            entry_price, entry_at = row.close, close_time(row.date)
+    session.add(WatchlistItem(ticker=ticker, entry_price=entry_price, entry_at=entry_at))
     try:
         session.commit()
     except IntegrityError:  # concurrent pin won the race
