@@ -2,12 +2,15 @@
 
 import re
 from datetime import UTC, date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+import config
 import scoring
+import summaries
 from models import (
     CongressTrade,
     NewsItem,
@@ -54,7 +57,16 @@ def feed(session: Session, source: str | None = None, now: datetime | None = Non
     by_ticker: dict[str, list[Signal]] = {}
     for sig in session.scalars(stmt):
         by_ticker.setdefault(sig.ticker, []).append(sig)
-    rows = [{"ticker": t, **_rank(sigs, now)} for t, sigs in by_ticker.items()]
+    today = now.astimezone(ZoneInfo(config.SCHEDULER_TZ)).date()
+    closes = recent_closes(session, list(by_ticker), today)
+    rows = [
+        {
+            "ticker": t,
+            **_rank(sigs, now),
+            "summary": summaries.summarize(sigs, closes.get(t, []), now, today),
+        }
+        for t, sigs in by_ticker.items()
+    ]
     rows.sort(key=lambda r: (-r["score"], r["ticker"]))
     return rows
 
@@ -66,6 +78,23 @@ def latest_close(session: Session, ticker: str) -> float | None:
         .order_by(PriceHistory.date.desc())
         .limit(1)
     )
+
+
+def recent_closes(
+    session: Session, tickers: list[str], today: date, n: int = 12
+) -> dict[str, list[tuple[date, float]]]:
+    """Last n (date, close) pairs per ticker, oldest first, in one query (21-day window)."""
+    if not tickers:
+        return {}
+    rows = session.execute(
+        select(PriceHistory.ticker, PriceHistory.date, PriceHistory.close)
+        .where(PriceHistory.ticker.in_(tickers), PriceHistory.date >= today - timedelta(days=21))
+        .order_by(PriceHistory.ticker, PriceHistory.date.asc())
+    )
+    out: dict[str, list[tuple[date, float]]] = {}
+    for ticker, d, close in rows:
+        out.setdefault(ticker, []).append((d, close))
+    return {t: c[-n:] for t, c in out.items()}
 
 
 def recent_news(session: Session, ticker: str, limit: int = 3) -> list[NewsItem]:

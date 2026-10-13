@@ -177,3 +177,11 @@ def test_invalid_ticker_not_linked(app, client):
     s.commit()
     html = client.get("/").get_data(as_text=True)
     assert "bad&lt;ticker" in html and "/ticker/bad" not in html
+
+
+def test_feed_renders_summary_badges(client):
+    html = client.get("/").get_data(as_text=True)
+    assert "BULLISH" in html or "BEARISH" in html or "MIXED" in html
+    assert "% last session" in html or "% today" in html  # AAA has price history
+    assert "no price data" in html  # BBB has none
+    assert "Outlook:" in html and "rule-based, not financial advice" in html

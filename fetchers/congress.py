@@ -182,7 +182,11 @@ def _save_filing(session: Session, f: dict, rows: list[dict]) -> int:
                     source="congress",
                     signal_type="purchase" if r["transaction_type"] == "purchase" else "sale",
                     raw_metric=r["amount_low"] / 1000,
-                    payload={"member": f["member"], "doc_url": f["doc_url"]},
+                    payload={
+                        "member": f["member"],
+                        "doc_url": f["doc_url"],
+                        "amount_range": r["amount_range"],
+                    },
                 )
             )
     session.commit()

@@ -20,6 +20,35 @@
       <span class="rounded bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-xs">{{ src }}</span>
       {% endfor %}
     </div>
+    {% set sm = r.summary %}
+    <div class="mt-2 flex flex-wrap items-center gap-2">
+      {% if sm.verdict == 'bullish' %}
+      <span class="rounded px-2.5 py-1 text-sm font-bold bg-green-600 text-white dark:bg-green-500 dark:text-gray-900">&#9650; BULLISH</span>
+      {% elif sm.verdict == 'bearish' %}
+      <span class="rounded px-2.5 py-1 text-sm font-bold bg-red-600 text-white dark:bg-red-500 dark:text-gray-900">&#9660; BEARISH</span>
+      {% else %}
+      <span class="rounded px-2.5 py-1 text-sm font-bold bg-gray-500 text-white dark:bg-gray-400 dark:text-gray-900">&#9670; MIXED</span>
+      {% endif %}
+      {% set when = 'today' if sm.price_status == 'today' else 'last session' %}
+      {% if sm.price_status == 'stale' %}
+      <span class="rounded px-2 py-0.5 text-sm font-medium bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200">price data stale</span>
+      {% elif sm.day_pct is none %}
+      <span class="rounded px-2 py-0.5 text-sm font-medium bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200">no price data</span>
+      {% elif sm.day_pct|abs < 0.05 %}
+      <span class="rounded px-2 py-0.5 text-sm font-semibold tabular-nums bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200">&#9632; 0.0% {{ when }}</span>
+      {% elif sm.day_pct > 0 %}
+      <span class="rounded px-2 py-0.5 text-sm font-semibold tabular-nums bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100">&#9650; +{{ '%.1f'|format(sm.day_pct) }}% {{ when }}</span>
+      {% else %}
+      <span class="rounded px-2 py-0.5 text-sm font-semibold tabular-nums bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100">&#9660; &minus;{{ '%.1f'|format(-sm.day_pct) }}% {{ when }}</span>
+      {% endif %}
+    </div>
+    {% if sm.why %}
+    <ul class="mt-2 text-sm list-disc list-inside space-y-0.5">
+      {% for line in sm.why %}<li>{{ line }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    <p class="mt-1 text-sm"><span class="font-semibold">Outlook:</span> {{ sm.outlook }}
+      <span class="text-xs text-gray-500 dark:text-gray-400">(rule-based, not financial advice)</span></p>
     <ul class="mt-2 text-sm text-gray-600 dark:text-gray-400 space-y-0.5">
       {% for s in r.signals[:5] %}
       <li>{{ s.source }} &middot; {{ s.signal_type }} &middot; {{ '%.1f'|format(s.raw_metric) }}
