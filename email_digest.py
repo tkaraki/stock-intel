@@ -4,7 +4,10 @@ import html
 import json
 import logging
 import re
+import smtplib
+import ssl
 from datetime import UTC, date, datetime, timedelta
+from email.message import EmailMessage
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -29,6 +32,7 @@ TOP_N = 5
 SAMPLES_PER_TICKER = 3
 SIGNAL_WINDOW = timedelta(hours=24)
 PORTFOLIO_WINDOW_DAYS = 7
+SMTP_TIMEOUT = 30
 VALID_ACTIONS = {"buy", "hold", "watch"}
 
 SYSTEM_PROMPT = (
@@ -427,18 +431,52 @@ def build_digest(session: Session, now: datetime | None = None, client=None) -> 
     return render_digest_html(data, recs, now)
 
 
+def _smtp_ready() -> bool:
+    return bool(
+        config.SMTP_HOST and config.SMTP_USER and config.SMTP_PASSWORD and config.DIGEST_TO_EMAIL
+    )
+
+
+def _build_message(body: str, now: datetime) -> EmailMessage:
+    date_str = now.astimezone(ZoneInfo(config.SCHEDULER_TZ)).strftime("%Y-%m-%d")
+    msg = EmailMessage()
+    msg["Subject"] = f"Stock Intel digest — {date_str}"
+    # Most providers (e.g. Gmail) only send as the signed-in account, so default to it.
+    msg["From"] = config.DIGEST_FROM_EMAIL or config.SMTP_USER
+    msg["To"] = config.DIGEST_TO_EMAIL
+    msg.set_content("This digest is formatted as HTML; open it in an HTML-capable mail client.")
+    msg.add_alternative(body, subtype="html")
+    return msg
+
+
+def _smtp_send(msg: EmailMessage) -> None:
+    """Send over SMTP: implicit TLS on port 465, otherwise upgrade with STARTTLS."""
+    context = ssl.create_default_context()
+    if config.SMTP_PORT == 465:
+        server = smtplib.SMTP_SSL(
+            config.SMTP_HOST, config.SMTP_PORT, context=context, timeout=SMTP_TIMEOUT
+        )
+    else:
+        server = smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=SMTP_TIMEOUT)
+    with server:
+        if config.SMTP_PORT != 465:
+            server.starttls(context=context)
+        server.login(config.SMTP_USER, config.SMTP_PASSWORD)
+        server.send_message(msg)
+
+
 def send_digest(
-    now: datetime | None = None, session: Session | None = None, client=None, mail_client=None
+    now: datetime | None = None, session: Session | None = None, client=None
 ) -> bool:
-    """Build and send the digest. Returns True if sent; never raises."""
+    """Build the digest, save it if DIGEST_SAVE_PATH is set, and email it over SMTP.
+
+    Returns True if emailed; never raises.
+    """
     own_session = session is None
     try:
         now = _as_utc(now)
-        if mail_client is None and not config.SENDGRID_API_KEY:
-            log.warning("SENDGRID_API_KEY not set; digest not sent")
-            return False
-        if not (config.DIGEST_FROM_EMAIL and config.DIGEST_TO_EMAIL):
-            log.warning("DIGEST_FROM_EMAIL/DIGEST_TO_EMAIL not set; digest not sent")
+        if not _smtp_ready() and not config.DIGEST_SAVE_PATH:
+            log.warning("SMTP settings and DIGEST_SAVE_PATH not set; digest skipped")
             return False
         if own_session:
             from db import get_session
@@ -449,24 +487,11 @@ def send_digest(
             path = Path(config.DIGEST_SAVE_PATH)
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(body, encoding="utf-8")
-        from sendgrid.helpers.mail import Mail
-
-        date_str = now.astimezone(ZoneInfo(config.SCHEDULER_TZ)).strftime("%Y-%m-%d")
-        message = Mail(
-            from_email=config.DIGEST_FROM_EMAIL,
-            to_emails=config.DIGEST_TO_EMAIL,
-            subject=f"Stock Intel digest — {date_str}",
-            html_content=body,
-        )
-        if mail_client is None:
-            from sendgrid import SendGridAPIClient
-
-            mail_client = SendGridAPIClient(config.SENDGRID_API_KEY)
-        resp = mail_client.send(message)
-        status = getattr(resp, "status_code", 202)
-        if status >= 300:
-            log.error("SendGrid returned status %s", status)
+            log.info("digest saved to %s", path)
+        if not _smtp_ready():
+            log.warning("SMTP settings not set; digest saved but not emailed")
             return False
+        _smtp_send(_build_message(body, now))
         log.info("digest sent to %s", config.DIGEST_TO_EMAIL)
         return True
     except Exception:
@@ -475,7 +500,6 @@ def send_digest(
     finally:
         if own_session and session is not None:
             session.close()
-
 
 if __name__ == "__main__":
     config.setup_logging()

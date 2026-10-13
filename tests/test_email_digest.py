@@ -189,32 +189,88 @@ def test_render_escapes_and_is_gmail_safe():
     assert "not financial advice" in out and "max-width:600px" in out
 
 
-def test_send_digest_missing_keys(monkeypatch):
-    monkeypatch.setattr(config, "SENDGRID_API_KEY", None)
+class FakeSMTP:
+    """Records what send_digest does instead of talking to a mail server."""
+
+    instances: list["FakeSMTP"] = []
+
+    def __init__(self, host, port, timeout=None, context=None):
+        self.host, self.port, self.calls, self.sent = host, port, [], []
+        FakeSMTP.instances.append(self)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def starttls(self, context=None):
+        self.calls.append("starttls")
+
+    def login(self, user, password):
+        self.calls.append(("login", user))
+
+    def send_message(self, msg):
+        self.sent.append(msg)
+
+
+@pytest.fixture
+def smtp(monkeypatch):
+    FakeSMTP.instances = []
+    monkeypatch.setattr(ed.smtplib, "SMTP", FakeSMTP)
+    monkeypatch.setattr(ed.smtplib, "SMTP_SSL", FakeSMTP)
+    monkeypatch.setattr(config, "SMTP_HOST", "smtp.example.com")
+    monkeypatch.setattr(config, "SMTP_PORT", 587)
+    monkeypatch.setattr(config, "SMTP_USER", "me@example.com")
+    monkeypatch.setattr(config, "SMTP_PASSWORD", "app-password")
     monkeypatch.setattr(config, "DIGEST_FROM_EMAIL", None)
+    monkeypatch.setattr(config, "DIGEST_TO_EMAIL", "to@example.com")
+    monkeypatch.setattr(config, "DIGEST_SAVE_PATH", None)
+    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", None)
+    return FakeSMTP
+
+
+def test_send_digest_missing_settings(monkeypatch):
+    monkeypatch.setattr(config, "SMTP_HOST", None)
+    monkeypatch.setattr(config, "DIGEST_SAVE_PATH", None)
     assert ed.send_digest(NOW) is False
 
 
-def test_send_digest_uses_sendgrid(session, monkeypatch, tmp_path):
-    monkeypatch.setattr(config, "SENDGRID_API_KEY", "k")
-    monkeypatch.setattr(config, "DIGEST_FROM_EMAIL", "from@example.com")
-    monkeypatch.setattr(config, "DIGEST_TO_EMAIL", "to@example.com")
-    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", None)
+def test_send_digest_over_smtp_with_starttls(session, smtp, monkeypatch, tmp_path):
     save = tmp_path / "d.html"
     monkeypatch.setattr(config, "DIGEST_SAVE_PATH", str(save))
-    sent = []
-    fake = SimpleNamespace(send=lambda m: sent.append(m) or SimpleNamespace(status_code=202))
-    assert ed.send_digest(NOW, session=session, mail_client=fake) is True
-    msg = sent[0].get()
-    assert msg["from"]["email"] == "from@example.com"
-    assert msg["personalizations"][0]["to"][0]["email"] == "to@example.com"
-    assert msg["subject"] == "Stock Intel digest — 2026-03-11"
+    assert ed.send_digest(NOW, session=session) is True
+    server = smtp.instances[0]
+    assert (server.host, server.port) == ("smtp.example.com", 587)
+    assert server.calls == ["starttls", ("login", "me@example.com")]
+    msg = server.sent[0]
+    assert msg["From"] == "me@example.com" and msg["To"] == "to@example.com"
+    assert msg["Subject"] == "Stock Intel digest — 2026-03-11"
+    assert msg.get_body(("html",)).get_content().strip().startswith("<")
     assert save.exists()
 
 
-def test_send_digest_never_raises(session, monkeypatch):
-    monkeypatch.setattr(config, "SENDGRID_API_KEY", "k")
-    monkeypatch.setattr(config, "DIGEST_FROM_EMAIL", "a@example.com")
-    monkeypatch.setattr(config, "DIGEST_TO_EMAIL", "b@example.com")
-    boom = SimpleNamespace(send=lambda m: (_ for _ in ()).throw(RuntimeError("x")))
-    assert ed.send_digest(NOW, session=session, mail_client=boom) is False
+def test_send_digest_port_465_uses_implicit_tls(session, smtp, monkeypatch):
+    monkeypatch.setattr(config, "SMTP_PORT", 465)
+    monkeypatch.setattr(config, "DIGEST_FROM_EMAIL", "alias@example.com")
+    assert ed.send_digest(NOW, session=session) is True
+    server = smtp.instances[0]
+    assert "starttls" not in server.calls
+    assert server.sent[0]["From"] == "alias@example.com"
+
+
+def test_send_digest_saves_file_without_smtp(session, monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "SMTP_HOST", None)
+    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", None)
+    save = tmp_path / "d.html"
+    monkeypatch.setattr(config, "DIGEST_SAVE_PATH", str(save))
+    assert ed.send_digest(NOW, session=session) is False
+    assert save.exists()
+
+
+def test_send_digest_never_raises(session, smtp, monkeypatch):
+    def boom(self, msg):
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(FakeSMTP, "send_message", boom)
+    assert ed.send_digest(NOW, session=session) is False

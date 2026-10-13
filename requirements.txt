@@ -8,6 +8,5 @@ requests==2.34.2
 vaderSentiment==3.3.2
 sec-edgar-downloader==5.1.0
 anthropic==1.13.0
-sendgrid==6.12.5
 pdfplumber==0.11.10
 pandas==3.0.6

@@ -13,7 +13,7 @@ A local stock-intelligence dashboard that collects market signals from free publ
 - **Watchlist** – pinned tickers with price charts, entry price, and return since entry.
 - **Congress trades** – House periodic transaction reports, searchable by ticker and member.
 - **Portfolio tracking** – quarterly 13F filings from selected funds and the ARK Innovation ETF's daily holdings, with new, increased, reduced, and closed positions surfaced as signals.
-- **Daily email digest** – a morning summary of the top signals with optional AI-written commentary from Claude, delivered through SendGrid.
+- **Daily email digest** – a morning summary of the top signals and watchlist, sent over standard SMTP through any email account or saved as an HTML file, with optional AI-written commentary from Claude.
 
 | Ticker detail | Congress trades |
 |---|---|
@@ -40,7 +40,7 @@ Any source without credentials is skipped, so the app runs with only part of its
 - **Backend:** Python 3.11, Flask, SQLAlchemy, SQLite
 - **Scheduling:** APScheduler, running in the same process as the web server
 - **Frontend:** server-rendered Jinja templates, htmx, Tailwind CSS, Chart.js
-- **Integrations:** PRAW, yfinance, pdfplumber, VADER, Anthropic API, SendGrid
+- **Integrations:** PRAW, yfinance, pdfplumber, VADER, SMTP, Anthropic API (optional)
 - **Tooling:** pytest, Ruff, GitHub Actions CI
 
 ## Getting started
@@ -66,8 +66,10 @@ All settings are read from `.env`; `.env.example` lists every option with placeh
 | `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USER_AGENT` | Reddit API access |
 | `NEWSAPI_KEY` | News headlines |
 | `SEC_EDGAR_COMPANY_NAME`, `SEC_EDGAR_EMAIL` | Contact details SEC EDGAR requires on every request |
-| `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | AI commentary in the daily digest |
-| `SENDGRID_API_KEY`, `DIGEST_FROM_EMAIL`, `DIGEST_TO_EMAIL` | Digest delivery |
+| `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Optional AI commentary in the daily digest (paid API; left blank, the digest is sent without it) |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | Outgoing mail server for the digest, e.g. Gmail with an app password |
+| `DIGEST_FROM_EMAIL`, `DIGEST_TO_EMAIL` | Digest sender (defaults to `SMTP_USER`) and recipient |
+| `DIGEST_SAVE_PATH` | Optional file path to also save each digest as HTML |
 | `SCHEDULER_ENABLED`, `SCHEDULER_TZ` | Background jobs and the time zone their schedules use |
 | `HOST`, `PORT`, `ALLOWED_HOSTS` | Web server binding |
 | `DATABASE_URL`, `LOG_LEVEL` | Storage location and log verbosity |
