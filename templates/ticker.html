@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ d.symbol }} - stock-intel{% endblock %}
+{% block content %}
+<div class="flex flex-wrap items-baseline gap-3 mb-4">
+  <h1 class="text-2xl font-bold">{{ d.symbol }}</h1>
+  {% if d.last is not none %}<span class="tabular-nums">{{ d.last|money }}</span>{% endif %}
+  {% if d.rank %}
+    <span class="text-sm text-gray-600 dark:text-gray-300">score {{ '%.1f'|format(d.rank.score) }} (7d)</span>
+    {% if d.rank.converging %}<span class="rounded bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100 px-2 py-0.5 text-xs font-medium">convergence x{{ d.rank.converging|length }}</span>{% endif %}
+    {% for s in d.rank.sources %}<span class="rounded bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-xs">{{ s }}</span>{% endfor %}
+  {% endif %}
+  {% if not d.pinned %}
+  <button id="pin-btn" hx-post="{{ url_for('pin') }}" hx-vals='{"ticker": "{{ d.symbol }}", "context": "ticker"}' hx-swap="outerHTML"
+          class="ml-auto rounded bg-indigo-600 text-white px-3 py-1 text-sm">Pin to watchlist</button>
+  {% endif %}
+</div>
+{% if not d.known %}
+<p class="text-gray-500 py-8 text-center">Nothing known about {{ d.symbol }} yet. It will appear once a fetcher records data for it.</p>
+{% else %}
+<div class="h-56 mb-6"><canvas data-chart="{{ url_for('chart', symbol=d.symbol, days=180) }}"></canvas></div>
+<div class="grid gap-6 md:grid-cols-2 text-sm">
+  <section><h2 class="font-semibold mb-1">Recent signals</h2>
+    <ul class="space-y-0.5">{% for s in d.signals %}
+      <li>{{ s.source }} &middot; {{ s.signal_type }} &middot; {{ '%.1f'|format(s.raw_metric) }}
+        <span class="text-gray-500">&middot; {{ s.observed_at.strftime('%b %d %H:%M') }} UTC</span></li>
+    {% else %}<li class="text-gray-500">No signals in the last 7 days.</li>{% endfor %}</ul></section>
+  <section><h2 class="font-semibold mb-1">News</h2>
+    <ul class="space-y-1">{% for n in d.news %}
+      <li><a class="hover:underline" href="{{ n.url|safe_url }}" target="_blank" rel="noopener noreferrer">{{ n.title }}</a>
+        <span class="text-gray-500">({{ n.sentiment|sent }})</span></li>
+    {% else %}<li class="text-gray-500">No news.</li>{% endfor %}</ul></section>
+  <section><h2 class="font-semibold mb-1">Congress trades</h2>
+    <ul class="space-y-0.5">{% for t in d.trades %}
+      <li>{{ t.member }} &middot; {{ t.transaction_type }} &middot; {{ t.amount_range or '-' }}
+        <span class="text-gray-500">&middot; filed {{ t.filed_date }}</span></li>
+    {% else %}<li class="text-gray-500">None.</li>{% endfor %}</ul></section>
+  <section><h2 class="font-semibold mb-1">Held by tracked portfolios</h2>
+    <ul class="space-y-0.5">{% for h in d.holders %}
+      <li>{{ h.portfolio.name }} &middot; {{ h.shares|num }} sh &middot; {{ h.value|big_money }}
+        <span class="text-gray-500">&middot; as of {{ h.as_of }}</span></li>
+    {% else %}<li class="text-gray-500">None.</li>{% endfor %}</ul></section>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Congress - stock-intel{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-3">Congress trades <span class="text-sm font-normal text-gray-500">{{ total }} found</span></h1>
+<form method="get" class="flex flex-wrap gap-2 mb-4">
+  <input name="ticker" value="{{ ticker }}" placeholder="Ticker" maxlength="7" class="w-28 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1 uppercase">
+  <input name="member" value="{{ member }}" placeholder="Member" class="w-48 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1">
+  <button class="rounded bg-indigo-600 text-white px-3 py-1">Filter</button>
+</form>
+{% if trades %}
+<div class="overflow-x-auto">
+<table class="w-full text-sm">
+  <thead class="text-left text-gray-500"><tr><th class="py-1 pr-3">Filed</th><th class="pr-3">Member</th><th class="pr-3">Ticker</th><th class="pr-3">Type</th><th class="pr-3">Amount</th><th>Traded</th></tr></thead>
+  <tbody>
+  {% for t in trades %}
+  <tr class="border-t border-gray-200 dark:border-gray-800">
+    <td class="py-1 pr-3 whitespace-nowrap">{{ t.filed_date }}</td>
+    <td class="pr-3">{{ t.member }} <span class="text-gray-500">({{ t.chamber }})</span></td>
+    <td class="pr-3">{% if t.ticker is valid_ticker %}<a class="hover:underline font-medium" href="{{ url_for('ticker_page', symbol=t.ticker) }}">{{ t.ticker }}</a>{% elif t.ticker %}{{ t.ticker }}{% else %}-{% endif %}</td>
+    <td class="pr-3">{{ t.transaction_type }}</td>
+    <td class="pr-3">{{ t.amount_range or '-' }}</td>
+    <td class="whitespace-nowrap">{{ t.transaction_date }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<div class="flex gap-4 mt-4 text-sm">
+  {% if page > 1 %}<a class="hover:underline" href="{{ url_for('congress', ticker=ticker or None, member=member or None, page=page-1) }}">&larr; Newer</a>{% endif %}
+  <span class="text-gray-500">Page {{ page }} of {{ pages }}</span>
+  {% if page < pages %}<a class="hover:underline" href="{{ url_for('congress', ticker=ticker or None, member=member or None, page=page+1) }}">Older &rarr;</a>{% endif %}
+</div>
+{% else %}
+<p class="text-gray-500 py-8 text-center">No congress trades found.</p>
+{% endif %}
+{% endblock %}

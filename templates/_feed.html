@@ -1,0 +1,34 @@
+<div id="feed">
+  <div class="flex flex-wrap gap-2 mb-4 text-sm">
+    {% for s in [None] + sources %}
+    <button hx-get="{{ url_for('index', source=s) if s else url_for('index') }}"
+            hx-target="#feed" hx-swap="outerHTML"
+            class="rounded-full px-3 py-1 border {{ 'bg-indigo-600 text-white border-indigo-600' if active == s else 'border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800' }}">
+      {{ s or 'All' }}
+    </button>
+    {% endfor %}
+  </div>
+  {% for r in rows %}
+  <section class="mb-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+    <div class="flex flex-wrap items-center gap-2">
+      {% if r.ticker is valid_ticker %}<a href="{{ url_for('ticker_page', symbol=r.ticker) }}" class="text-lg font-bold hover:underline">{{ r.ticker }}</a>{% else %}<span class="text-lg font-bold">{{ r.ticker }}</span>{% endif %}
+      <span class="text-sm tabular-nums text-gray-600 dark:text-gray-300">score {{ '%.1f'|format(r.score) }}</span>
+      {% if r.converging %}
+      <span class="rounded bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100 px-2 py-0.5 text-xs font-medium" title="{{ r.converging|join(', ') }}">convergence x{{ r.converging|length }}</span>
+      {% endif %}
+      {% for src in r.sources %}
+      <span class="rounded bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-xs">{{ src }}</span>
+      {% endfor %}
+    </div>
+    <ul class="mt-2 text-sm text-gray-600 dark:text-gray-400 space-y-0.5">
+      {% for s in r.signals[:5] %}
+      <li>{{ s.source }} &middot; {{ s.signal_type }} &middot; {{ '%.1f'|format(s.raw_metric) }}
+        {% if s.sentiment is not none %}&middot; sentiment {{ s.sentiment|sent }}{% endif %}
+        <span class="text-gray-400">&middot; {{ s.observed_at.strftime('%b %d %H:%M') }} UTC</span></li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% else %}
+  <p class="text-gray-500 py-8 text-center">No signals in the last 24h &mdash; the scheduler fetches every 15&ndash;30 min.</p>
+  {% endfor %}
+</div>
