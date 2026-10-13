@@ -2,6 +2,7 @@
 
 import logging
 import time
+from datetime import UTC, date, datetime
 from types import SimpleNamespace
 
 import pandas as pd
@@ -170,6 +171,70 @@ def test_prices_upsert_and_entry_price(session, monkeypatch):
     items = {i.ticker: i for i in session.scalars(select(WatchlistItem))}
     assert items["NVDA"].entry_price == 110.0
     assert items["MU"].entry_price == 50.0
+    # backfilled entry is the latest close's date at 16:00 ET (21:00 UTC in January)
+    assert items["NVDA"].entry_at == datetime(2026, 1, 6, 21, 0, tzinfo=UTC)
+    assert items["MU"].entry_at is None
+
+
+def live_frame(closes):
+    idx = pd.DatetimeIndex(
+        ["2026-10-12 18:13", "2026-10-12 18:14", "2026-10-12 18:15"], tz="UTC"
+    ).tz_convert("America/New_York")
+    return pd.DataFrame({"Close": closes}, index=idx)
+
+
+def fake_download(df):
+    """Mimic yfinance's single-ticker column layout: (ticker, field) only with group_by."""
+    def download(ticker, **kwargs):
+        if kwargs.get("group_by") == "ticker":
+            cols = pd.MultiIndex.from_tuples([(ticker, c) for c in df.columns])
+        else:
+            cols = pd.MultiIndex.from_tuples([(c, ticker) for c in df.columns])
+        return pd.DataFrame(df.values, index=df.index, columns=cols)
+    return download
+
+
+def test_live_price_success(monkeypatch):
+    df = live_frame([185.0, 185.06, float("nan")])
+    monkeypatch.setattr(prices.yf, "download", fake_download(df))
+    assert prices.live_price("NVDA") == (185.06, datetime(2026, 10, 12, 18, 14, tzinfo=UTC))
+
+
+def test_live_price_rejects_bad_prices(monkeypatch):
+    for bad in (0.0, -1.0, float("inf")):
+        df = live_frame([1.0, 1.0, bad])
+        monkeypatch.setattr(prices.yf, "download", lambda *a, df=df, **k: df)
+        assert prices.live_price("NVDA") is None
+
+
+def test_live_price_timeout(monkeypatch, caplog):
+    def slow(*a, **k):
+        time.sleep(0.3)
+        return live_frame([1.0, 1.0, 1.0])
+
+    monkeypatch.setattr(prices.yf, "download", slow)
+    monkeypatch.setattr(prices, "LIVE_TIMEOUT", 0.05)
+    assert prices.live_price("NVDA") is None
+    assert "timed out" in caplog.text
+
+
+def test_close_time_ignores_scheduler_tz(monkeypatch):
+    monkeypatch.setattr(config, "SCHEDULER_TZ", "Asia/Tokyo")
+    assert prices.close_time(date(2026, 10, 9)) == datetime(2026, 10, 9, 20, 0, tzinfo=UTC)
+
+
+def test_live_price_empty(monkeypatch):
+    monkeypatch.setattr(prices.yf, "download", lambda *a, **k: pd.DataFrame())
+    assert prices.live_price("NVDA") is None
+
+
+def test_live_price_exception(monkeypatch, caplog):
+    def boom(*a, **k):
+        raise RuntimeError("yf down")
+
+    monkeypatch.setattr(prices.yf, "download", boom)
+    assert prices.live_price("NVDA") is None
+    assert "live price failed" in caplog.text
 
 
 def test_prices_error_returns_zero(session, monkeypatch, caplog):

@@ -49,6 +49,7 @@ class WatchlistItem(Base):
     ticker: Mapped[str] = mapped_column(String(16), unique=True)
     added_at: Mapped[datetime] = mapped_column(default=utcnow)
     entry_price: Mapped[float | None] = mapped_column(Float)
+    entry_at: Mapped[datetime | None] = mapped_column()  # when entry_price was observed
 
 
 class PriceHistory(Base):
