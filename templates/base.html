@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}stock-intel{% endblock %}</title>
+  <script>tailwind = { config: { darkMode: 'media' } }</script>
+  {# Tailwind play CDN serves a generated script, so SRI is unreliable; version pinned only. #}
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <script src="https://unpkg.com/htmx.org@2.0.4"
+          integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+"
+          crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"
+          integrity="sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4"
+          crossorigin="anonymous"></script>
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</head>
+<body class="min-h-full bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100">
+  <header class="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+    <div class="mx-auto max-w-5xl px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-2">
+      <a href="{{ url_for('index') }}" class="font-bold">stock-intel</a>
+      <nav class="flex gap-4 text-sm">
+        <a class="hover:underline" href="{{ url_for('index') }}">Feed</a>
+        <a class="hover:underline" href="{{ url_for('watchlist_page') }}">Watchlist</a>
+        <a class="hover:underline" href="{{ url_for('congress') }}">Congress</a>
+        <a class="hover:underline" href="{{ url_for('portfolios') }}">Portfolios</a>
+      </nav>
+      <form action="{{ url_for('ticker_search') }}" method="get" class="ml-auto">
+        <input name="q" placeholder="Ticker, e.g. NVDA" maxlength="7" autocapitalize="characters"
+               class="w-36 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1 text-sm uppercase">
+      </form>
+    </div>
+  </header>
+  <main class="mx-auto max-w-5xl px-4 py-6">{% block content %}{% endblock %}</main>
+</body>
+</html>

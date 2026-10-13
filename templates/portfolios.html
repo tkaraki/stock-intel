@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Portfolios - stock-intel{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-3">Tracked portfolios</h1>
+{% for v in views %}
+<section class="mb-6 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+  <h2 class="font-semibold">{{ v.portfolio.name }} <span class="text-sm font-normal text-gray-500">{{ v.portfolio.manager }}{% if v.as_of %} &middot; as of {{ v.as_of }} &middot; {{ v.total_value|big_money }}{% endif %}</span></h2>
+  {% if v.holdings %}
+  <div class="grid gap-4 md:grid-cols-2 mt-3">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="text-left text-gray-500"><tr><th>Holding</th><th class="text-right">Shares</th><th class="text-right">Value</th></tr></thead>
+        <tbody>
+        {% for h in v.holdings %}
+        <tr class="border-t border-gray-200 dark:border-gray-800">
+          <td class="py-0.5">{% if h.ticker is valid_ticker %}<a class="font-medium hover:underline" href="{{ url_for('ticker_page', symbol=h.ticker) }}">{{ h.ticker }}</a> {% elif h.ticker %}<span class="font-medium">{{ h.ticker }}</span> {% endif %}<span class="text-gray-500">{{ h.name }}</span></td>
+          <td class="text-right tabular-nums">{{ h.shares|num }}</td>
+          <td class="text-right tabular-nums">{{ h.value|big_money }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="text-sm">
+      <h3 class="font-medium mb-1">Changes{% if v.prior_as_of %} vs {{ v.prior_as_of }}{% endif %}</h3>
+      {% if v.changes %}
+      <ul class="space-y-0.5">
+        {% for name, c in v.changes %}
+        <li><span class="font-medium">{{ name }}</span>
+          <span class="{{ 'text-green-600 dark:text-green-400' if c.change_type.value in ('new', 'increased') else 'text-red-600 dark:text-red-400' }}">{{ c.change_type.value }}{% if c.pct_change is not none %} {{ (c.pct_change * 100)|pct }}{% endif %}</span>
+          <span class="text-gray-500">({{ c.prior_shares|num }} &rarr; {{ c.current_shares|num }})</span></li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="text-gray-500">{{ 'No material changes.' if v.prior_as_of else 'No earlier snapshot to compare.' }}</p>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <p class="text-gray-500 mt-2">No holdings fetched yet.</p>
+  {% endif %}
+</section>
+{% else %}
+<p class="text-gray-500 py-8 text-center">No portfolios tracked.</p>
+{% endfor %}
+{% endblock %}

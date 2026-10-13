@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Watchlist - stock-intel{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-3">Watchlist</h1>
+<form hx-post="{{ url_for('pin') }}" hx-target="#watchlist" hx-swap="innerHTML"
+      hx-on::after-request="if(event.detail.successful) this.reset()" class="flex gap-2 mb-4">
+  <input name="ticker" required maxlength="7" placeholder="Pin ticker (e.g. AAPL)" autocapitalize="characters"
+         class="flex-1 sm:flex-none sm:w-56 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1 uppercase">
+  <button class="rounded bg-indigo-600 text-white px-3 py-1">Pin</button>
+</form>
+<div id="watchlist" class="space-y-3">{% include "_watchlist_rows.html" %}</div>
+{% endblock %}

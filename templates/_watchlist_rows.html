@@ -1,0 +1,26 @@
+{% for i in items %}
+<article id="row-{{ i.ticker }}" class="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+  <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+    {% if i.ticker is valid_ticker %}<a href="{{ url_for('ticker_page', symbol=i.ticker) }}" class="text-lg font-bold hover:underline">{{ i.ticker }}</a>{% else %}<span class="text-lg font-bold">{{ i.ticker }}</span>{% endif %}
+    <span class="tabular-nums">{{ i.last|money }}</span>
+    <span class="text-sm text-gray-500">entry {{ i.entry_price|money }}</span>
+    <span class="tabular-nums font-medium {{ 'text-gray-500' if i.pnl is none else ('text-green-600 dark:text-green-400' if i.pnl >= 0 else 'text-red-600 dark:text-red-400') }}">{{ i.pnl|pct }}</span>
+    <button hx-delete="{{ url_for('unpin', ticker=i.ticker) }}" hx-target="#row-{{ i.ticker }}" hx-swap="outerHTML"
+            class="ml-auto text-sm text-red-600 dark:text-red-400 hover:underline">Unpin</button>
+  </div>
+  <div class="mt-3 grid gap-4 sm:grid-cols-2">
+    <div class="h-32"><canvas data-chart="{{ url_for('chart', symbol=i.ticker) }}"></canvas></div>
+    <ul class="text-sm space-y-1">
+      {% for n in i.news %}
+      <li><a class="hover:underline" href="{{ n.url|safe_url }}" target="_blank" rel="noopener noreferrer">{{ n.title }}</a>
+        <span class="text-gray-500">({{ n.sentiment|sent }})</span></li>
+      {% else %}
+      <li class="text-gray-500">No recent news.</li>
+      {% endfor %}
+    </ul>
+  </div>
+</article>
+{% else %}
+<p class="text-gray-500 py-8 text-center">Nothing pinned yet. Add a ticker above.</p>
+{% endfor %}
+<script>window.initCharts && window.initCharts(document.getElementById('watchlist'));</script>
