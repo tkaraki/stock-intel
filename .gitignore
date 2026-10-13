@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+.venv
+__pycache__
+*.db
+*.db-*
+data/*
+!data/.gitkeep
+logs/*
+!logs/.gitkeep
+.pytest_cache
+.ruff_cache
+sec-edgar-filings/
