@@ -17,7 +17,7 @@ def _get(name: str, default: str | None = None) -> str | None:
 
 
 FLASK_SECRET_KEY = _get("FLASK_SECRET_KEY", "dev-only-insecure-key")
-DATABASE_URL = _get("DATABASE_URL", "sqlite:///stock_intel.db")
+DATABASE_URL = _get("DATABASE_URL", "sqlite:///data/stock_intel.db")
 
 REDDIT_CLIENT_ID = _get("REDDIT_CLIENT_ID")
 REDDIT_CLIENT_SECRET = _get("REDDIT_CLIENT_SECRET")
