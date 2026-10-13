@@ -7,6 +7,7 @@ A local stock-intelligence dashboard that collects market signals from free publ
 ## Features
 
 - **Signal feed** – ranks tickers by a combined score over the last 24 hours, filterable by source. Each signal is log-scaled so sources with different units are comparable, weighted per source, and decayed with age.
+- **Signal summaries** – each ticker card shows a clear bullish/bearish verdict, the latest session's price move, the signals behind the verdict, and a short rule-based outlook.
 - **Convergence detection** – tickers flagged by two or more independent sources within 24 hours receive a score bonus and a visible badge.
 - **Ticker pages** – price history chart, recent signals, news with sentiment, Congress trades, and holdings by tracked portfolios.
 - **Watchlist** – pinned tickers with price charts, entry price, and return since entry.
