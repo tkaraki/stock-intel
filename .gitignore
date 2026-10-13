@@ -12,3 +12,4 @@ logs/*
 .pytest_cache
 .ruff_cache
 sec-edgar-filings/
+.DS_Store
