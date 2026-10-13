@@ -38,8 +38,9 @@ def test_gather_top5_ordering_and_window(session):
     session.commit()
     top = ed.gather_digest_data(session, NOW)["top_signals"]
     assert len(top) == 5
-    # A (10 + 1, x1.5 convergence = ~15.5) is still the weakest of A-F except B (20)
-    assert [t["ticker"] for t in top] == ["F", "E", "D", "C", "B"]
+    # Log-scaled: A converges (reddit + news) so (log1p(10) + log1p(1)) x 1.5 ~ 4.6 beats
+    # F's single log1p(60) ~ 4.1; B is the weakest and drops out.
+    assert [t["ticker"] for t in top] == ["A", "F", "E", "D", "C"]
     assert "OLD" not in [t["ticker"] for t in top]
 
 

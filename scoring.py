@@ -1,4 +1,5 @@
 """stock-intel: signal scoring with source weights, recency decay and convergence bonus."""
+import math
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import Protocol
@@ -42,16 +43,25 @@ def recency_decay(signal_time: datetime, now: datetime | None = None) -> float:
     return 0.5 ** (age / RECENCY_HALF_LIFE_HOURS)
 
 
+def scale_metric(raw_metric: float) -> float:
+    """Log-scale a raw metric so sources with different units land in a similar range.
+
+    Reddit upvotes run into the thousands while a portfolio change is a percent, so
+    raw values aren't comparable: log1p(5000) ~ 8.5 vs log1p(100) ~ 4.6. The sign is kept.
+    """
+    return math.copysign(math.log1p(abs(raw_metric)), raw_metric)
+
+
 def score_signal(
     raw_metric: float, source: str, signal_time: datetime, now: datetime | None = None
 ) -> float:
-    """raw_metric scaled by the source weight and recency decay."""
+    """Log-scaled raw_metric, times the source weight and recency decay."""
     try:
         weight = SOURCE_WEIGHTS[source]
     except KeyError:
         valid = ", ".join(sorted(SOURCE_WEIGHTS))
         raise UnknownSourceError(f"unknown source {source!r}; valid sources: {valid}") from None
-    return raw_metric * weight * recency_decay(signal_time, now)
+    return scale_metric(raw_metric) * weight * recency_decay(signal_time, now)
 
 
 def converging_sources(signals: Iterable[SignalLike], now: datetime | None = None) -> set[str]:
